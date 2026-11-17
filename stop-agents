@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Stop Claude Code agents that still have a running process (a "pid" in
-# "claude agents --json"). Works from bash and zsh on macOS and Linux.
+# Stop Claude Code background agents that still have a running process (an "id"
+# and a "pid" in "claude agents --json"). Works from bash and zsh on macOS and Linux.
 #
 # Usage: stop-agents [-y|--yes] [-n|--dry-run] [-s|--state blocked,working]
 #   -y, --yes       stop without asking
@@ -24,11 +24,12 @@ done
 
 json="$(claude agents --json)" || { echo "claude agents --json failed" >&2; exit 1; }
 
-# Emit: id<TAB>pid<TAB>state<TAB>status<TAB>name for agents that have a pid.
+# Emit: id<TAB>pid<TAB>state<TAB>status<TAB>name for background agents (an id)
+# that have a pid. Interactive sessions have a pid but no id; claude stop can't stop them.
 if command -v jq >/dev/null 2>&1; then
   rows="$(printf '%s' "$json" | jq -r --arg s "$states" '
     ($s | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(. != ""))) as $want
-    | .[] | select(.pid != null)
+    | .[] | select(.pid != null and .id != null)
     | select(($want | length) == 0 or (.state as $st | $want | index($st)))
     | [.id, (.pid|tostring), .state, (.status // ""), .name] | @tsv')"
 elif command -v python3 >/dev/null 2>&1; then
@@ -36,17 +37,17 @@ elif command -v python3 >/dev/null 2>&1; then
 import json, os, sys
 want = [s.strip() for s in os.environ["STATES"].split(",") if s.strip()]
 for a in json.load(sys.stdin):
-    if a.get("pid") and (not want or a.get("state") in want):
+    if a.get("id") and a.get("pid") and (not want or a.get("state") in want):
         print("\t".join(str(a.get(k, "")) for k in ("id", "pid", "state", "status", "name")))
 ')"
 else
   echo "need jq or python3 to parse JSON" >&2; exit 1
 fi
 
-if [ -z "$rows" ]; then echo "No agents with a running process (pid) found."; exit 0; fi
+if [ -z "$rows" ]; then echo "No background agents with a running process (pid) found."; exit 0; fi
 
 count="$(printf '%s\n' "$rows" | wc -l | tr -d ' ')"
-echo "Found $count agent(s) with a running process:"
+echo "Found $count background agent(s) with a running process:"
 { printf 'ID\tPID\tSTATE\tSTATUS\tNAME\n'; printf '%s\n' "$rows"; } | column -t -s "$(printf '\t')"
 echo
 

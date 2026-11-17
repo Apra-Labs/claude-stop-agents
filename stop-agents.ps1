@@ -1,5 +1,5 @@
-# Stop Claude Code agents that still have a running process (a "pid" in
-# "claude agents --json"). Windows version; run via stop-agents.cmd.
+# Stop Claude Code background agents that still have a running process (an "id"
+# and a "pid" in "claude agents --json"). Windows version; run via stop-agents.cmd.
 #
 # Usage: stop-agents [-y|--yes] [-n|--dry-run] [-s|--state blocked,working]
 #   -y, --yes       stop without asking
@@ -31,14 +31,16 @@ if ($LASTEXITCODE -ne 0) { Write-Host "claude agents --json failed (exit $LASTEX
 $parsed = ($raw | Out-String) | ConvertFrom-Json
 $agents = @($parsed)
 
-# Only agents that still have a live process (a "pid" field) are stopped.
+# Only background agents (an "id" field) that still have a live process (a "pid"
+# field) are stopped. Interactive sessions are listed with a pid but no id, and
+# "claude stop" cannot stop them.
 $targets = @($agents | Where-Object {
-    $_.pid -and ($State.Count -eq 0 -or $State -contains $_.state)
+    $_.id -and $_.pid -and ($State.Count -eq 0 -or $State -contains $_.state)
 })
 
-if ($targets.Count -eq 0) { Write-Host 'No agents with a running process (pid) found.'; exit 0 }
+if ($targets.Count -eq 0) { Write-Host 'No background agents with a running process (pid) found.'; exit 0 }
 
-Write-Host "Found $($targets.Count) agent(s) with a running process:"
+Write-Host "Found $($targets.Count) background agent(s) with a running process:"
 $targets | Format-Table -AutoSize id, pid, state, status, name | Out-String -Width 200 | Write-Host
 
 if ($DryRun) { Write-Host 'Dry run: nothing stopped.'; exit 0 }
@@ -51,7 +53,10 @@ if (-not $Yes) {
 $failed = 0
 foreach ($a in $targets) {
     Write-Host -NoNewline "Stopping $($a.id) ($($a.name))... "
+    # A failing native command must not abort the loop (stderr + 'Stop' throws in PS 5.1).
+    $ErrorActionPreference = 'Continue'
     & claude stop $a.id *> $null
+    $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -eq 0) { Write-Host 'ok' -ForegroundColor Green }
     else { Write-Host "failed (exit $LASTEXITCODE)" -ForegroundColor Red; $failed++ }
 }
