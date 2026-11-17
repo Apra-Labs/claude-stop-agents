@@ -2,7 +2,7 @@
 
 Stop every running [Claude Code](https://github.com/anthropics/claude-code) background agent with one command.
 
-Claude Code can stop background sessions one at a time (`claude stop <id>`). This tool reads `claude agents --json` and stops each agent that still has a running process (one that has a `pid`). The conversations are kept, so `claude attach <id>` or `claude --resume` can reopen them.
+Claude Code can stop background sessions one at a time (`claude stop <id>`). This tool reads `claude agents --json` and stops each background agent that still has a running process (one with an `id` and a `pid`). Interactive sessions also appear in that list, with a `pid` but no `id`; `claude stop` can't stop them, so they are skipped. The conversations are kept, so `claude attach <id>` or `claude --resume` can reopen them.
 
 ## Usage
 
